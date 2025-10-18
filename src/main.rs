@@ -188,9 +188,12 @@ fn main() {
         .queue(cursor::Hide)
         .unwrap();
 
-    ctrlc::set_handler(|| {}).expect("Error setting Ctrl-C handler");
-
     let (sx, rx) = mpsc::channel();
+    let sx_ctrl = sx.clone();
+    ctrlc::set_handler(move || {
+        sx_ctrl.send(()).unwrap();
+    }).expect("Error setting Ctrl-C handler");
+
     thread::spawn(move || loop {
         let (new_w, new_h) = crossterm::terminal::size().unwrap();
         let new_w = new_w as usize;
