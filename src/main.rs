@@ -6,7 +6,7 @@ use crossterm::{
 };
 use std::{
     io::{self, stdin, stdout, Stdout, Write},
-    sync::mpsc,
+    sync::{mpsc, Arc, Mutex},
     thread::{self, sleep},
     time::Duration,
     usize,
@@ -188,12 +188,13 @@ fn main() {
         .queue(cursor::Hide)
         .unwrap();
 
-    let (sx, rx) = mpsc::channel();
-    let sx_ctrl = sx.clone();
+    let is_running = Arc::new(Mutex::new(true));
+    let is_running_ctrl = is_running.clone();
     ctrlc::set_handler(move || {
-        sx_ctrl.send(()).unwrap();
+        *is_running_ctrl.lock().unwrap() = false;
     }).expect("Error setting Ctrl-C handler");
 
+    let is_running_thread = is_running.clone();
     thread::spawn(move || loop {
         let (new_w, new_h) = crossterm::terminal::size().unwrap();
         let new_w = new_w as usize;
@@ -208,7 +209,7 @@ fn main() {
         buffer.present(&mut io_stdout, resized).unwrap();
 
         buffer.next();
-        if let Ok(()) = rx.try_recv() {
+        if !*is_running_thread.lock().unwrap() {
             break;
         }
         sleep(Duration::from_millis(30));
@@ -217,6 +218,6 @@ fn main() {
     let _ = stdin.lock();
 
     sleep(Duration::from_secs(args.duration));
-    sx.send(()).unwrap();
+    *is_running.lock().unwrap() = false;
     stdout().queue(cursor::Show).unwrap();
 }
